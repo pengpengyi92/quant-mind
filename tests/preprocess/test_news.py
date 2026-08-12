@@ -125,8 +125,42 @@ class NewsPreprocessTests(unittest.TestCase):
         self.assertEqual(
             tuple((hint.symbol, hint.exchange, hint.raw) for hint in hints),
             (
-                ("EVEX", "NYSE", "(NYSE: EVEX"),
-                ("EVEXW", "NYSE", ", EVEXW"),
+                ("EVEX", "NYSE", "(NYSE: EVEX, EVEXW)"),
+                ("EVEXW", "NYSE", "(NYSE: EVEX, EVEXW)"),
+            ),
+        )
+
+    def test_exchange_ticker_hints_stop_shared_list_at_semicolon(self):
+        hints = extract_exchange_ticker_hints(
+            "Example issuer (NYSE: EVEX, EVEXW; B3: EVEB31) announced results."
+        )
+
+        self.assertEqual(
+            tuple((hint.symbol, hint.exchange, hint.raw) for hint in hints),
+            (
+                (
+                    "EVEX",
+                    "NYSE",
+                    "(NYSE: EVEX, EVEXW; B3: EVEB31)",
+                ),
+                (
+                    "EVEXW",
+                    "NYSE",
+                    "(NYSE: EVEX, EVEXW; B3: EVEB31)",
+                ),
+            ),
+        )
+
+    def test_exchange_ticker_hints_capture_new_shared_list_members(self):
+        hints = extract_exchange_ticker_hints(
+            "Prior (NYSE: EVEX). Offering (NYSE: EVEX, EVEXW)."
+        )
+
+        self.assertEqual(
+            tuple((hint.symbol, hint.exchange, hint.raw) for hint in hints),
+            (
+                ("EVEX", "NYSE", "(NYSE: EVEX)"),
+                ("EVEXW", "NYSE", "(NYSE: EVEX, EVEXW)"),
             ),
         )
 
@@ -155,6 +189,21 @@ class NewsPreprocessTests(unittest.TestCase):
                 "semicolon boundary BMV",
                 "(NYSE: ASR; BMV: ASUR)",
                 (("ASR", "NYSE", "(NYSE: ASR"),),
+            ),
+            (
+                "ordinary prose inside parentheses",
+                "(NYSE: IBM, and revenue increased)",
+                (("IBM", "NYSE", "(NYSE: IBM"),),
+            ),
+            (
+                "uppercase token before ordinary prose",
+                "(NYSE: IBM, ABC and revenue increased)",
+                (("IBM", "NYSE", "(NYSE: IBM"),),
+            ),
+            (
+                "uppercase token before non-exchange semicolon",
+                "(NYSE: IBM, ABC; revenue increased)",
+                (("IBM", "NYSE", "(NYSE: IBM"),),
             ),
         )
 
