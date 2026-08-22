@@ -279,6 +279,12 @@ async def _collect_pr_newswire(
             end=end,
             fetcher=fetcher,
         )
+        if not discovery.complete:
+            return NewsBatch(
+                failures=discovery.failures,
+                observed_count=discovery.observed_count,
+                complete=False,
+            )
         outcomes = await asyncio.gather(
             *(
                 _collect_observation(

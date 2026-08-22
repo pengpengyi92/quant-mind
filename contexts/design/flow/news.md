@@ -31,7 +31,7 @@ The primary requirement is that any caller can request a complete, one-shot coll
 ## Design Principles
 
 1. **Ask for news, not fetch details.** Callers choose a source and time window. They do not choose RSS, listing pages, how to move between pages, or article parsing rules.
-2. **Return every source row.** QuantMind does not silently remove duplicate source rows. Repeated rows remain repeated output records, and may share the same stable ID.
+2. **Return every source row for complete windows.** QuantMind does not silently remove duplicate source rows. Repeated rows remain repeated output records, and may share the same stable ID. An incomplete listing scan returns discovery evidence without fetching partial article bodies.
 3. **Show partial failures.** The returned batch includes item failures. Invalid inputs still raise before network work starts.
 4. **Hide source implementation details.** PR Newswire may later use a public mechanism other than listing pages without changing the public function.
 5. **List supported sources explicitly.** The first version selects from a closed source list. It does not expose a provider plugin API or registry.
@@ -97,6 +97,7 @@ NewsWindow
   -> select the source collector
   -> scan public listing pages from newest to oldest
   -> keep rows inside [start, end)
+  -> stop before article fetches when listing coverage is incomplete
   -> fetch each linked article
   -> convert HTML to Markdown
   -> NewsDocument or NewsFailure
@@ -123,6 +124,8 @@ After collection begins, one item failure does not stop independent items. Each 
 
 - a listing page could not be fetched or parsed;
 - the listing scan stopped before crossing the window start.
+
+An incomplete listing scan returns its discovery failures and observed row count without fetching article bodies. Its documents are empty because the caller cannot treat the partial listing as complete coverage; a completeness-preserving caller can retry narrower windows without downloading the same parent-window articles again.
 
 Article failures stay in `failures` but do not change whether all listing rows were found. A caller can distinguish "the full time window was scanned" from "every found article was processed." It can store successful records and retry failed articles separately. An empty batch is complete only when the listing scan crossed the requested start.
 

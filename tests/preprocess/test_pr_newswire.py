@@ -2,7 +2,7 @@ import re
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import respx
@@ -337,6 +337,36 @@ class DiscoverPRNewswireTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CollectPRNewswireTests(unittest.IsolatedAsyncioTestCase):
+    async def test_incomplete_discovery_skips_article_collection(self) -> None:
+        with (
+            patch(
+                "quantmind.preprocess.pr_newswire._DEFAULT_FETCH_POLICY",
+                _TEST_POLICY,
+            ),
+            patch("quantmind.preprocess.pr_newswire._MAX_PAGES", 1),
+            patch(
+                "quantmind.preprocess.pr_newswire._collect_observation",
+                new=AsyncMock(),
+            ) as collect_observation,
+            respx.mock(assert_all_called=True) as router,
+        ):
+            router.get(url__regex=_LISTING_RE).mock(
+                side_effect=lambda request: _listing_response(
+                    _fixture("listing_short_page_1.html"), request
+                )
+            )
+            result = await _collect_pr_newswire(
+                start=datetime(2026, 7, 12, tzinfo=timezone.utc),
+                end=datetime(2026, 7, 14, 4, 30, tzinfo=timezone.utc),
+                retain_raw_html=False,
+            )
+
+        self.assertFalse(result.complete)
+        self.assertGreater(result.observed_count, 0)
+        self.assertEqual(result.documents, ())
+        self.assertIn("exceeded 1 pages", result.failures[0].message)
+        collect_observation.assert_not_awaited()
+
     async def test_collects_article_and_discards_raw_html_by_default(
         self,
     ) -> None:
